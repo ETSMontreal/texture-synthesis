@@ -10,7 +10,7 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 
 import copy
-
+import time
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 LOSS_SCALING = 1e9
@@ -111,7 +111,7 @@ def get_texture_model_and_losses(cnn, texture_img, texture_layers, device):
     return model, texture_losses
 
 
-def run_texture_synthesis(cnn, texture_image, image_size, num_steps, device, verbose=True):
+def run_texture_synthesis(cnn, texture_image, image_size, num_steps, device, verbose=True, callback=None):
 
     texture_img = pre_processing(texture_image, image_size, device)
 
@@ -132,6 +132,13 @@ def run_texture_synthesis(cnn, texture_image, image_size, num_steps, device, ver
         print('Optimizing..\n')
         
     run = [0]  # weird local variable behaviour
+    
+    # First image (before 1st iteration);loss/iteration_time here is meaningless
+    callback(image=post_processing(synthesized_img),
+             loss=0.0,
+             iteration=run[0],
+             iteration_time=0.0)
+    
     while run[0] <= num_steps:
 
         def closure():
@@ -154,7 +161,16 @@ def run_texture_synthesis(cnn, texture_image, image_size, num_steps, device, ver
 
             return texture_score
 
-        optimizer.step(closure)
+        start = time.time()
+        loss = optimizer.step(closure)
+        end = time.time()
+
+        iteration_time = (end - start)
+        if callback != None:
+          callback(image=post_processing(synthesized_img),
+                   loss=loss.item(),
+                   iteration=run[0],
+                   iteration_time=iteration_time)
 
     return post_processing(synthesized_img)
 
